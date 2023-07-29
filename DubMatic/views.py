@@ -6,6 +6,10 @@ import json
 import re
 import speech_recognition as sr
 from pydub import AudioSegment
+import requests
+import assemblyai as aai
+from googletrans import Translator
+import whisper
 
 
 @csrf_protect
@@ -31,8 +35,12 @@ def postVideo(request):
             wavConvert(inputWavPath,outputWavPath)            
 
             # Extracting text
-            text=transcribe_audio(outputWavPath)
-            print(text)
+            text=speechToText(outputWavPath)
+
+            translate_to_hindi(text,outputWavPath)
+
+            # Add voice in 11labs
+            addVoice(request,outputWavPath)
 
             return JsonResponse({'videoPath':videoPath,'lang':lang})
         except json.JSONDecodeError:
@@ -59,7 +67,6 @@ def extractAudio(videoPath, outputPath):
     except Exception as e:
         print("Error extracting audio:", str(e))
 
-
 def wavConvert(inputPath, outputPath):
 
     print(inputPath,outputPath)
@@ -69,31 +76,42 @@ def wavConvert(inputPath, outputPath):
     # Export the audio as a WAV file
     audio.export(outputPath, format='wav')
 
+def translate_to_hindi(text,filePath):
+    translator = Translator()
+    translated_text = translator.translate(text, src='en', dest='hi')
+    print(translated_text.text)
+    # saving text in a file
+    filePath=filePath[0:-4]+"hindi.txt"
+    with open(filePath, 'w',encoding='utf-8') as file:
+        file.write(translated_text.text)
+    # return translated_text.text
 
+def speechToText(filePath):
+    model = whisper.load_model("base.en")
+    result = model.transcribe(filePath)
+    filePath=filePath[0:-4]+".txt"
+    with open(filePath, 'w') as file:
+        file.write(result['text'])
+    return result['text']
 
-# Extracting text
-def transcribe_audio(audio_file_path):
-    # Initialize the speech recognizer
-    recognizer = sr.Recognizer()
+# 11 labs functions
+def addVoice(request,wavPath):
+    url = "https://api.elevenlabs.io/v1/voices/add"
 
-    try:
-        # Load the audio file
-        with sr.AudioFile(audio_file_path) as audio_file:
-            # Record the audio from the file
-            audio = recognizer.record(audio_file)
+    headers = {
+    "Accept": "application/json",
+    "xi-api-key": "fc3395a73afe62ac77c4099589cc5e85"
+    }
 
-            # Use Google Web Speech API to transcribe the audio
-            text = recognizer.recognize_google(audio)
+    data = {
+        'name': 'morgan',
+        'labels': '{"accent": "American"}',
+        'description': 'Voice description'
+    }
 
-            # saving text in a file
-            filePath=audio_file_path[0:-4]+".txt"
-            with open(filePath, 'w') as file:
-                file.write(text)
+    files = [
+        ('files', (wavPath, open(wavPath, 'rb'), 'audio/mpeg')),
+    ]
 
-            return text
-    except sr.UnknownValueError:
-        print("Google Web Speech API could not understand the audio.")
-    except sr.RequestError as e:
-        print(f"Could not request results from Google Web Speech API; {e}")
-
-    return None
+    response = requests.post(url, headers=headers, data=data, files=files)
+    print(response.text)
