@@ -1,27 +1,18 @@
 from django.http import HttpResponse
-from moviepy.editor import VideoFileClip
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt, csrf_protect
 import json
 import re
-import speech_recognition as sr
 from pydub import AudioSegment
 import requests
-import assemblyai as aai
 from googletrans import Translator
 import whisper
-from pydub import AudioSegment
-from pydub.playback import play
-from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips
-import subprocess
 from moviepy.editor import VideoFileClip, AudioFileClip
-from moviepy.audio.fx import audio_loop
 import os
 
 @csrf_protect
 @csrf_exempt
 def postVideo(request):
-    # extractAudio(videoPath, videoPath[0:len(videoPath)-4]+".mp3")
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
@@ -33,7 +24,6 @@ def postVideo(request):
             # Extracting audio
             audioMp3=videoPath[0:len(videoPath)-4]+".mp3"
             extractAudio(videoPath,audioMp3)
-            # print(outputPath)
 
             outputWavPath=videoPath[0:len(videoPath)-4]+".wav"
             inputWavPath=audioMp3
@@ -56,16 +46,16 @@ def postVideo(request):
             translatedAudioPath=addText11(request,translatedTextFile,voice_id)
             print("audio retrieved from 11 labs")
 
-            # addaudio to video
+            # add audio to video
             translatedVideoPath=translatedAudioPath[0:-4]+".mp4"
             replace_audio_in_video(videoPath,translatedAudioPath,translatedVideoPath) 
             print("audio added to video")
+
+            # Deleting files
             os.remove(audioMp3) 
             os.remove(outputWavPath) 
             os.remove(translatedTextFile) 
             os.remove(translatedAudioPath) 
-
-
             
             return JsonResponse({'videoPath':videoPath,'lang':lang})
         except json.JSONDecodeError:
@@ -75,7 +65,6 @@ def postVideo(request):
 
 def extractAudio(videoPath, outputPath):
     try:
-
         videoClip = VideoFileClip(videoPath)
 
         # Extract the audio from the video
@@ -93,14 +82,11 @@ def extractAudio(videoPath, outputPath):
         print("Error extracting audio:", str(e))
 
 def wavConvert(inputPath, outputPath):
-
-    # print(inputPath,outputPath)
     # Load the MP3 file using pydub
     audio = AudioSegment.from_mp3(inputPath)
     # Export the audio as a WAV file
     audio.export(outputPath, format='wav')
     
-
 def translateTextToTargetLang(text,filePath,target_lang):
     translator = Translator()
     translated_text = translator.translate(text, src='en', dest=target_lang)
@@ -109,7 +95,6 @@ def translateTextToTargetLang(text,filePath,target_lang):
     with open(filePath, 'w',encoding='utf-8') as file:
         file.write(translated_text.text)
     return filePath
-    # return translated_text.text
 
 def speechToText(filePath):
     model = whisper.load_model("base.en")
@@ -121,7 +106,6 @@ def speechToText(filePath):
 
 # 11 labs functions
 def addVoice(request,wavPath):
-
     url = "https://api.elevenlabs.io/v1/voices/add"
 
     headers = {
@@ -140,12 +124,11 @@ def addVoice(request,wavPath):
     ]
 
     response = requests.post(url, headers=headers, data=data, files=files)
-    # print(response.text)
+
     if response.status_code == 200:
         # Parse the response JSON and access the 'voice_id' attribute
         response_data = response.json()
         voice_id = response_data.get('voice_id')
-        # print("Voice ID:", voice_id)
         return voice_id
     else:
         print("Error: Request failed with status code", response.status_code)
@@ -172,7 +155,6 @@ def addText11(request,filePathHindi,voice_id):
         "similarity_boost": 1
     }
     }
-    # print(data)
     response = requests.post(url, json=data, headers=headers)
     translated_audio=filePathHindi[0:-4]+".mp3"
     with open(translated_audio, 'wb') as f:
